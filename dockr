@@ -3,7 +3,19 @@
 # notes:
 # use backslash before commonly aliased commands
 
-set -e
+set -ex
+
+# DOCKER_DNS is the local DNS (dnsmasq). 
+# Default value is local IP address 
+DOCKER_DNS=${DOCKER_DNS:=$(ip route get 8.8.8.8 | awk 'NR==1 {print $NF}')}
+
+# Extra Docker options
+DOCKER_OPT=${DOCKER_OPT:=''}
+
+CUR=$(pwd)
+
+DEV_CONF_PATTERN="*.dev.conf"
+DB_CONTAINER=mysql-ohy
 
 case "$1" in
 
@@ -12,24 +24,26 @@ attach)
     docker attach --sig-proxy=false $2
     ;;
 
-# Build a tagged container image based on a *path*
-b)
-    namespace=${DOCKER_NAMESPACE:-$USER}
-    dockerfile_location=${2:-"."}
-    length=$(($#))
-    if [ -a $dockerfile_location ]; then
-        params=${@:3:$length}
-    else
-        # we didn't pass a path, so use the default path and pass $2-
-        dockerfile_location=.
-        params=${@:2:$length}
+sw)
+    shift
+    DOCKER_OPT="$DOCKER_OPT -v $CUR:/var/www/html/"
+    if [[ -d "$CUR/config/nginx" ]]; then 
+        NGINX_CONF=$(ls -1 $CUR/config/nginx/$DEV_CONF_PATTERN 2>/dev/null)
+        for i in $NGINX_CONF; do
+            echo ${i##*/}
+            DOCKER_OPT="$DOCKER_OPT -v $i:/etc/nginx/sites-enabled/${i##*/}"
+        done
     fi
-    echo location: $dockerfile_location
-    name=$(cd $dockerfile_location && echo ${PWD##*/})
-    # TODO let you build an image without a namespace
-    docker build -t "$namespace/$name" $params $dockerfile_location
-    ;;
+    DOCKER_OPT="$DOCKER_OPT -p 2200:22 -p=80:80 -p=443:443"
 
+    id=$(docker ps | grep "\->80" | cut -d' ' -f1)
+    if [[ -n $id  ]]; then
+        echo -e "nginx docker($id) is running, stopping it";
+        docker stop $id
+    fi;
+
+    docker run --dns=$DOCKER_DNS $DOCKER_OPT -d  $@
+    ;;
 
 # Log into a image and throw away the container
 #
