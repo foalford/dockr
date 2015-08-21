@@ -33,10 +33,9 @@ sw)
             echo ${i##*/}
             DOCKER_OPT="$DOCKER_OPT -v $i:/etc/nginx/sites-enabled/${i##*/}"
         done
-        NGINX_CONF_DIR=$(ls -d $CUR/config/nginx/*/ 2>/dev/null)
+        NGINX_CONF_DIR=$(find $CUR/config/nginx/* -type d)
         for i in $NGINX_CONF_DIR; do
-            j=${i%*/}
-            DOCKER_OPT="$DOCKER_OPT -v $i:/etc/nginx/${j##*/}"
+            DOCKER_OPT="$DOCKER_OPT -v $i:/etc/nginx/${i##*/}"
         done
     fi
     DOCKER_OPT="$DOCKER_OPT -p 2200:22 -p=80:80 -p=443:443"
